@@ -41,3 +41,9 @@ jobs:
         with:
           name: allure-results
           path: allure-results
+
+      - name: Run Allure Action
+        uses: allure-framework/allure-report@v0
+        with:
+          report-directory: "/allure-results"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
