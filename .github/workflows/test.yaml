@@ -6,17 +6,26 @@ on:
   pull_request:
     branches: [ main, master ]
 
+# Добавляем права для деплоя
+permissions:
+  contents: write
+  pages: write
+  pull-requests: write
+
 jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
         with:
           python-version: '3.13'
+          enable-cache: true
 
       - name: Install dependencies
         run: uv sync
@@ -29,12 +38,23 @@ jobs:
         continue-on-error: true
 
       - name: Get Allure history
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         if: always()
         continue-on-error: true
         with:
           ref: gh-pages
           path: gh-pages
+
+      - name: Create history directory
+        if: always()
+        run: |
+          if [ -d "gh-pages/allure-history" ]; then
+            mkdir -p allure-history
+            cp -r gh-pages/allure-history/* allure-history/ 2>/dev/null || true
+          else
+            mkdir -p allure-history
+          fi
+
       - name: Allure Report action from marketplace
         uses: simple-elf/allure-report-action@master
         if: always()
@@ -42,10 +62,56 @@ jobs:
           allure_results: allure-results
           allure_history: allure-history
           keep_reports: 20
+
       - name: Deploy report to Github Pages
+        if: always() && github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./allure-history
+          keep_files: true
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+          commit_message: 'Update Allure report'
+
+      - name: Upload Allure results as artifact
         if: always()
-        uses: peaceiris/actions-gh-pages@v2
-        env:
-          PERSONAL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PUBLISH_BRANCH: gh-pages
-          PUBLISH_DIR: allure-history
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results
+          path: allure-results
+          retention-days: 30
+
+      - name: Upload Allure report as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: allure-history
+          retention-days: 30
+
+      - name: Comment PR with report URL
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const reportUrl = `https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/`;
+            const status = '${{ job.status }}';
+            const emoji = status === 'success' ? '✅' : '⚠️';
+            
+            const comment = `${emoji} **Allure Test Report**\n\n`;
+            const body = comment + `📊 Report URL: ${reportUrl}\n\n`;
+            body += `🔍 Tests completed with status: ${status}\n`;
+            body += `📁 Results can be downloaded from workflow artifacts`;
+            
+            try {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body
+              });
+            } catch(e) {
+              console.log('Could not add comment to PR:', e);
+            }
