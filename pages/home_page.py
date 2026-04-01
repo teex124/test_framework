@@ -5,6 +5,8 @@ from playwright.sync_api import expect
 from pages.base import BasePage
 import allure
 
+
+
 class HomePage(BasePage):
     url = 'https://github.com/'
     def search_repository(self):
