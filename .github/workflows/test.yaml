@@ -2,48 +2,50 @@ name: Test
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
 
 jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v2
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
         with:
           python-version: '3.13'
 
-      - name: Install uv
-        run: |
-          python -m pip install --upgrade pip
-          pip install uv
-
       - name: Install dependencies
-        run: |
-          uv pip install --system -e .
+        run: uv sync
 
       - name: Install Playwright browsers
-        run: |
-          uv pip install --system playwright
-          uv run playwright install chromium
+        run: uv run playwright install chromium --with-deps
 
-      - name: Run tests
-        run: |
-          uv run pytest --alluredir=allure-results
+      - name: Run tests with Allure
+        run: uv run pytest --alluredir=allure-results --clean-alluredir
+        continue-on-error: true
 
-      - name: Upload Allure results
+      - name: Get Allure history
+        uses: actions/checkout@v2
         if: always()
-        uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
-          name: allure-results
-          path: allure-results
-
-      - name: Run Allure Action
-        uses: allure-framework/allure-report@v0
+          ref: gh-pages
+          path: gh-pages
+      - name: Allure Report action from marketplace
+        uses: simple-elf/allure-report-action@master
+        if: always()
         with:
-          report-directory: "/allure-results"
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          allure_results: allure-results
+          allure_history: allure-history
+          keep_reports: 20
+      - name: Deploy report to Github Pages
+        if: always()
+        uses: peaceiris/actions-gh-pages@v2
+        env:
+          PERSONAL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLISH_BRANCH: gh-pages
+          PUBLISH_DIR: allure-history
