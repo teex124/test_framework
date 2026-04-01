@@ -1,0 +1,23 @@
+from time import sleep
+
+from playwright.sync_api import expect
+
+from pages.base import BasePage
+import allure
+
+class HomePage(BasePage):
+    url = 'https://github.com/'
+    def search_repository(self):
+        with allure.step('Нажимаем на кнопку поиска репозитория'):
+            self.page.locator('.header-search-button').click()
+        with allure.step('Вводим данные в поиска'):
+            input = self.page.locator('#query-builder-test')
+            input.fill('teex124/pomodoro')
+        with allure.step('Начинаем поиск'):
+            input.press('Enter')
+        self.page.get_by_role('link', name='teex124/pomodoro').click()
+        self.page.get_by_role('link', name = '12 Commits').click()
+        expect(self.page.get_by_role('link', name='ce02ad6')).to_be_visible()
+
+
+
