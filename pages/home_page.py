@@ -10,6 +10,12 @@ import allure
 class HomePage(BasePage):
     url = 'https://github.com/'
     def search_repository(self):
+        allure.dynamic.title('Поиск репозитория')
+        allure.dynamic.severity(allure.severity_level.NORMAL)
+        allure.dynamic.description('Открытие Git Hub > Ввод данных > Enter > Проверка')
+        allure.dynamic.story('Требуется возможность поиска репозиториев ')
+        allure.dynamic.link(self.url)
+        allure.attach('<h1>Hellow world</h1>', attachment_type=allure.attachment_type.HTML)
         with allure.step('Нажимаем на кнопку поиска репозитория'):
             self.page.locator('.header-search-button').click()
         with allure.step('Вводим данные в поиска'):
