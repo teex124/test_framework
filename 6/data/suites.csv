@@ -1,0 +1,2 @@
+"DESCRIPTION","DURATION IN MS","NAME","PARENT SUITE","START TIME","STATUS","STOP TIME","SUB SUITE","SUITE","TEST CLASS","TEST METHOD"
+"Открытие Git Hub > Ввод данных > Enter > Проверка","3303","Поиск репозитория","tests","Thu Apr 02 09:21:09 UTC 2026","passed","Thu Apr 02 09:21:13 UTC 2026","","test_search","",""
