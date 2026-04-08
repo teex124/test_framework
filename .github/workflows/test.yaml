@@ -119,13 +119,16 @@ jobs:
         if: always()
         run: |
           echo "📝 Creating notifications config..."
-          
-          # Обработка topic_id (может быть пустым)
+
+          REPORT_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/${{ github.run_number }}/"
+          echo "Report URL: $REPORT_URL"
+
+          # Обработка topic_id
           TOPIC_ID="${{ secrets.TELEGRAM_TOPIC_ID }}"
           if [ -z "$TOPIC_ID" ] || [ "$TOPIC_ID" = "" ]; then
             TOPIC_ID=""
           fi
-          
+
           cat > notifications/config.json << EOF
           {
             "base": {
@@ -133,7 +136,7 @@ jobs:
               "project": "${{ github.event.repository.name }}",
               "environment": "${{ github.ref_name }}",
               "comment": "Run #${{ github.run_number }} | Commit: ${{ github.sha }}",
-              "reportLink": "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/",
+              "reportLink": "${REPORT_URL}",
               "language": "ru",
               "allureFolder": "allure-report",
               "enableChart": true,
@@ -143,15 +146,14 @@ jobs:
             "telegram": {
               "token": "${{ secrets.TELEGRAM_BOT_TOKEN }}",
               "chat": "${{ secrets.TELEGRAM_CHAT_ID }}",
-              "topic": "",
+              "topic": "${TOPIC_ID}",
               "replyTo": "",
               "templatePath": "/templates/telegram.ftl"
             }
           }
           EOF
-          
-          echo "✅ Config created:"
-          cat notifications/config.json | sed 's/"token": ".*"/"token": "***HIDDEN***"/'
+
+          echo "✅ Config created"
 
       - name: Send notification to Telegram
         if: always()
