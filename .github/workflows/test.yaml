@@ -62,6 +62,105 @@ jobs:
           allure_history: allure-history
           keep_reports: 20
 
+      - name: Verify allure report structure
+        if: always()
+        run: |
+          echo "📁 Checking allure-history structure..."
+          ls -la allure-history/ || echo "allure-history not found"
+          echo "📁 Checking widgets folder..."
+          ls -la allure-history/widgets/ || echo "widgets folder not found"
+          
+          if [ ! -f "allure-history/widgets/summary.json" ]; then
+            echo "⚠️ summary.json not found in widgets folder"
+            echo "Searching for summary.json..."
+            find . -name "summary.json" || echo "summary.json not found anywhere"
+          else
+            echo "✅ summary.json found in widgets folder"
+          fi
+
+      - name: Prepare report for notifications
+        if: always()
+        run: |
+          echo "📦 Preparing report for notifications..."
+          
+          # Создаём структуру, которую ожидает allure-notifications
+          mkdir -p allure-report
+          
+          # Копируем все файлы из allure-history в allure-report
+          if [ -d "allure-history" ]; then
+            cp -r allure-history/* allure-report/ 2>/dev/null || true
+          fi
+          
+          # Если widgets нет, но есть summary.json в корне
+          if [ -f "allure-report/summary.json" ] && [ ! -d "allure-report/widgets" ]; then
+            echo "Moving summary.json to widgets folder..."
+            mkdir -p allure-report/widgets
+            mv allure-report/summary.json allure-report/widgets/
+          fi
+          
+          # Проверяем финальную структуру
+          echo "✅ Final report structure:"
+          ls -la allure-report/
+          if [ -d "allure-report/widgets" ]; then
+            echo "Widgets folder contents:"
+            ls -la allure-report/widgets/
+          fi
+
+      - name: Download allure-notifications jar
+        if: always()
+        run: |
+          echo "⬇️ Downloading allure-notifications..."
+          mkdir -p notifications
+          curl -L -o notifications/allure-notifications-4.11.0.jar \
+            https://github.com/qa-guru/allure-notifications/releases/download/4.11.0/allure-notifications-4.11.0.jar
+          echo "✅ Jar downloaded"
+
+      - name: Create notifications config for CI
+        if: always()
+        run: |
+          echo "📝 Creating notifications config..."
+          
+          # Обработка topic_id (может быть пустым)
+          TOPIC_ID="${{ secrets.TELEGRAM_TOPIC_ID }}"
+          if [ -z "$TOPIC_ID" ] || [ "$TOPIC_ID" = "" ]; then
+            TOPIC_ID=""
+          fi
+          
+          cat > notifications/config.json << EOF
+          {
+            "base": {
+              "logo": "",
+              "project": "${{ github.event.repository.name }}",
+              "environment": "${{ github.ref_name }}",
+              "comment": "Run #${{ github.run_number }} | Commit: ${{ github.sha }}",
+              "reportLink": "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/",
+              "language": "ru",
+              "allureFolder": "allure-report",
+              "enableChart": true,
+              "enableSuitesPublishing": false,
+              "customData": {}
+            },
+            "telegram": {
+              "token": "${{ secrets.TELEGRAM_BOT_TOKEN }}",
+              "chat": "${{ secrets.TELEGRAM_CHAT_ID }}",
+              "topic": "",
+              "replyTo": "",
+              "templatePath": "/templates/telegram.ftl"
+            }
+          }
+          EOF
+          
+          echo "✅ Config created:"
+          cat notifications/config.json | sed 's/"token": ".*"/"token": "***HIDDEN***"/'
+
+      - name: Send notification to Telegram
+        if: always()
+        run: |
+          echo "🚀 Sending notification to Telegram..."
+          java "-DconfigFile=notifications/config.json" \
+               -jar notifications/allure-notifications-4.11.0.jar
+          echo "✅ Notification sent"
+
       - name: Deploy report to Github Pages
         if: always() && github.ref == 'refs/heads/main'
         uses: peaceiris/actions-gh-pages@v4
@@ -82,47 +181,6 @@ jobs:
           path: allure-results
           retention-days: 30
 
-      - name: Download allure-notifications jar
-        if: always()
-        run: |
-          mkdir -p notifications
-          curl -L -o notifications/allure-notifications-4.11.0.jar \
-            https://github.com/qa-guru/allure-notifications/releases/download/4.11.0/allure-notifications-4.11.0.jar
-
-      - name: Create notifications config for CI
-        if: always()
-        run: |
-          cat > notifications/config.json << 'EOF'
-          {
-            "base": {
-              "logo": "",
-              "project": "${{ github.event.repository.name }}",
-              "environment": "${{ github.ref_name }}",
-              "comment": "Run #${{ github.run_number }}",
-              "reportLink": "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/",
-              "language": "ru",
-              "allureFolder": "allure-history",
-              "enableChart": true,
-              "enableSuitesPublishing": false,
-              "customData": {}
-            },
-            "telegram": {
-              "token": "${{ secrets.TELEGRAM_BOT_TOKEN }}",
-              "chat": "${{ secrets.TELEGRAM_CHAT_ID }}",
-              "topic": " ",
-              "replyTo": "",
-              "templatePath": "/templates/telegram.ftl"
-            }
-          }
-          EOF
-
-      - name: Send notification to Telegram
-        if: always()
-        run: |
-          java "-DconfigFile=notifications/config.json" \
-               -jar notifications/allure-notifications-4.11.0.jar
-
-
       - name: Upload Allure report as artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -141,7 +199,7 @@ jobs:
             const emoji = status === 'success' ? '✅' : '⚠️';
             
             const comment = `${emoji} **Allure Test Report**\n\n`;
-            const body = comment + `📊 Report URL: ${reportUrl}\n\n`;
+            let body = comment + `📊 Report URL: ${reportUrl}\n\n`;
             body += `🔍 Tests completed with status: ${status}\n`;
             body += `📁 Results can be downloaded from workflow artifacts`;
             
