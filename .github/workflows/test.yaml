@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [ main, master ]
 
-# Добавляем права для деплоя
 permissions:
   contents: write
   pages: write
@@ -82,6 +81,47 @@ jobs:
           name: allure-results
           path: allure-results
           retention-days: 30
+
+      - name: Download allure-notifications jar
+        if: always()
+        run: |
+          mkdir -p notifications
+          curl -L -o notifications/allure-notifications-4.11.0.jar \
+            https://github.com/qa-guru/allure-notifications/releases/download/4.11.0/allure-notifications-4.11.0.jar
+
+      - name: Create notifications config for CI
+        if: always()
+        run: |
+          cat > notifications/config.json << 'EOF'
+          {
+            "base": {
+              "logo": "",
+              "project": "${{ github.event.repository.name }}",
+              "environment": "${{ github.ref_name }}",
+              "comment": "Run #${{ github.run_number }}",
+              "reportLink": "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/",
+              "language": "ru",
+              "allureFolder": "allure-history",
+              "enableChart": true,
+              "enableSuitesPublishing": false,
+              "customData": {}
+            },
+            "telegram": {
+              "token": "${{ secrets.TELEGRAM_BOT_TOKEN }}",
+              "chat": "${{ secrets.TELEGRAM_CHAT_ID }}",
+              "topic": " ",
+              "replyTo": "",
+              "templatePath": "/templates/telegram.ftl"
+            }
+          }
+          EOF
+
+      - name: Send notification to Telegram
+        if: always()
+        run: |
+          java "-DconfigFile=notifications/config.json" \
+               -jar notifications/allure-notifications-4.11.0.jar
+
 
       - name: Upload Allure report as artifact
         if: always()
